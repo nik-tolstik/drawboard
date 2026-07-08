@@ -1,4 +1,5 @@
 import { SceneStore, type SaveState } from "./application/SceneStore";
+import type { LayerOrderCommand } from "./application/SceneStore";
 import type { Tool } from "./domain/elements";
 import { IndexedDbSceneRepository } from "./infrastructure/indexedDbSceneRepository";
 import { CanvasRenderer } from "./ui/CanvasRenderer";
@@ -16,6 +17,17 @@ const tools: Array<{ id: Tool; label: string; shortcut: string; numericShortcut?
   { id: "arrow", label: "Arrow", shortcut: "A" },
 ];
 
+const layerControls: Array<{
+  action: LayerOrderCommand;
+  label: string;
+  icon: Parameters<typeof getIcon>[0];
+}> = [
+  { action: "backward", label: "Назад", icon: "layerBackward" },
+  { action: "forward", label: "Вперёд", icon: "layerForward" },
+  { action: "front", label: "Полностью вперёд", icon: "layerToFront" },
+  { action: "back", label: "Полностью назад", icon: "layerToBack" },
+];
+
 const app = document.querySelector<HTMLDivElement>("#app");
 
 if (!app) {
@@ -26,7 +38,7 @@ app.innerHTML = `
   <main class="app-shell">
     <header class="top-bar" aria-label="Whiteboard controls">
       <section class="brand" aria-label="Application">
-        <span class="brand__mark" aria-hidden="true">S</span>
+        <img class="brand__mark" src="/logo.svg" alt="" aria-hidden="true" />
         <span class="brand__name">SketchBoard</span>
       </section>
 
@@ -69,6 +81,17 @@ app.innerHTML = `
       <aside class="help-panel" aria-label="Canvas tips">
         <span>Middle mouse drag pans the canvas</span>
       </aside>
+      <section class="layer-panel" data-layer-panel aria-label="Layer controls" hidden>
+        ${layerControls
+          .map(
+            (control) => `
+              <button class="icon-button" type="button" data-layer-action="${control.action}" aria-label="${control.label}" title="${control.label}">
+                ${getIcon(control.icon)}
+              </button>
+            `,
+          )
+          .join("")}
+      </section>
     </div>
   </main>
 `;
@@ -78,8 +101,9 @@ const saveState = app.querySelector<HTMLElement>("[data-save-state]");
 const textEditor = app.querySelector<HTMLTextAreaElement>("[data-text-editor]");
 const strokeColor = app.querySelector<HTMLInputElement>("[data-stroke-color]");
 const fillColor = app.querySelector<HTMLInputElement>("[data-fill-color]");
+const layerPanel = app.querySelector<HTMLElement>("[data-layer-panel]");
 
-if (!canvas || !saveState || !textEditor || !strokeColor || !fillColor) {
+if (!canvas || !saveState || !textEditor || !strokeColor || !fillColor || !layerPanel) {
   throw new Error("Application controls were not initialized.");
 }
 
@@ -127,6 +151,15 @@ const setSaveState = (state: SaveState): void => {
 
   saveState.textContent = labels[state];
   saveState.dataset.state = state;
+};
+
+const updateLayerPanel = (): void => {
+  const hasSelection = controller.getSelectedElementIds().size > 0;
+
+  layerPanel.hidden = !hasSelection;
+  app.querySelectorAll<HTMLButtonElement>("[data-layer-action]").forEach((button) => {
+    button.disabled = !hasSelection;
+  });
 };
 
 const openTextEditor = (
@@ -216,6 +249,7 @@ const controller = new EditorController(
     canvas.dataset.panning = String(isPanning);
   },
   openTextEditor,
+  updateLayerPanel,
 );
 
 resizeObserver.observe(canvas);
@@ -260,6 +294,19 @@ app.querySelector<HTMLButtonElement>("[data-clear]")?.addEventListener("click", 
 
 app.querySelector<HTMLButtonElement>("[data-export]")?.addEventListener("click", () => {
   controller.exportPng();
+});
+
+app.querySelectorAll<HTMLButtonElement>("[data-layer-action]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const action = button.dataset.layerAction as LayerOrderCommand | undefined;
+
+    if (!action) {
+      return;
+    }
+
+    controller.updateSelectionLayer(action);
+    updateLayerPanel();
+  });
 });
 
 window.addEventListener("keydown", (event) => {
@@ -324,4 +371,5 @@ window.addEventListener("keydown", (event) => {
 });
 
 setActiveToolButton(controller.getTool());
+updateLayerPanel();
 void store.hydrate();

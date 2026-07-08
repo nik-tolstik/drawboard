@@ -8,7 +8,7 @@ import type {
   Viewport,
 } from "../domain/elements";
 import { getArrowHead, getDiamondPoints, normalizeRect, type Rect } from "../domain/geometry";
-import { getElementBounds } from "../domain/selection";
+import { getElementBounds, getElementsInLayerOrder } from "../domain/selection";
 
 export type CanvasRenderOptions = {
   preview?: DrawingElement;
@@ -60,7 +60,7 @@ export class CanvasRenderer {
 
     const renderedElements: DrawingElement[] = [];
 
-    for (const element of scene.elements) {
+    for (const element of getElementsInLayerOrder(scene.elements)) {
       if (options.hiddenElementIds?.has(element.id)) {
         continue;
       }

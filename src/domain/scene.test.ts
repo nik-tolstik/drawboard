@@ -44,4 +44,19 @@ describe("scene", () => {
 
     expect(scene.elements.map((element) => element.type)).toEqual(["square", "circle"]);
   });
+
+  it("adds layers to old persisted elements", () => {
+    const scene = normalizeScene({
+      version: 1,
+      elements: [
+        { id: "1", type: "text" },
+        { id: "2", type: "text", layer: 8 },
+        { id: "3", type: "text" },
+      ] as never,
+      viewport: DEFAULT_VIEWPORT,
+      updatedAt: Date.now(),
+    });
+
+    expect(scene.elements.map((element) => element.layer)).toEqual([0, 8, 9]);
+  });
 });

@@ -89,15 +89,10 @@ button {
 }
 
 .brand__mark {
-  display: grid;
   width: 27px;
   height: 27px;
-  place-items: center;
   border-radius: 7px;
-  background: #171717;
-  color: #ffffff;
-  font-size: 14px;
-  font-weight: 750;
+  display: block;
 }
 
 .brand__name {
@@ -299,6 +294,36 @@ button {
   backdrop-filter: blur(18px);
 }
 
+.layer-panel {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  z-index: 9;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(16, 16, 16, 0.1);
+  backdrop-filter: blur(18px);
+  transform: translateX(-50%);
+}
+
+.layer-panel[hidden] {
+  display: none;
+}
+
+.layer-panel .icon-button:disabled {
+  color: rgba(22, 22, 22, 0.3);
+  cursor: default;
+}
+
+.layer-panel .icon-button:disabled:hover {
+  background: transparent;
+}
+
 @media (max-width: 760px) {
   .top-bar {
     top: 10px;
@@ -329,5 +354,9 @@ button {
     left: 10px;
     bottom: 10px;
     text-align: center;
+  }
+
+  .layer-panel {
+    bottom: 58px;
   }
 }

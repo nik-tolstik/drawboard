@@ -82,6 +82,57 @@ describe("SceneStore", () => {
     expect(store.getSnapshot().elements).toHaveLength(0);
   });
 
+  it("assigns new elements to increasing top layers", async () => {
+    const repository = createRepository();
+    const store = new SceneStore(repository);
+    await store.hydrate();
+    const first = createTextElement({ x: 10, y: 10 }, "first");
+    const second = createTextElement({ x: 20, y: 20 }, "second");
+
+    store.addElement(first);
+    store.addElement(second);
+
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([0, 1]);
+  });
+
+  it("moves selected elements through layer order", async () => {
+    const repository = createRepository();
+    const store = new SceneStore(repository);
+    await store.hydrate();
+    const first = createTextElement({ x: 10, y: 10 }, "first");
+    const second = createTextElement({ x: 20, y: 20 }, "second");
+    const third = createTextElement({ x: 30, y: 30 }, "third");
+
+    store.addElements([first, second, third]);
+
+    expect(store.updateElementsLayer(new Set([second.id]), "backward")).toBe(true);
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([1, 0, 2]);
+
+    expect(store.updateElementsLayer(new Set([second.id]), "forward")).toBe(true);
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([0, 1, 2]);
+
+    expect(store.updateElementsLayer(new Set([first.id]), "front")).toBe(true);
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([2, 0, 1]);
+
+    expect(store.updateElementsLayer(new Set([first.id]), "back")).toBe(true);
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps layer changes undoable", async () => {
+    const repository = createRepository();
+    const store = new SceneStore(repository);
+    await store.hydrate();
+    const first = createTextElement({ x: 10, y: 10 }, "first");
+    const second = createTextElement({ x: 20, y: 20 }, "second");
+
+    store.addElements([first, second]);
+    store.updateElementsLayer(new Set([first.id]), "front");
+
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([1, 0]);
+    expect(store.undo()).toBe(true);
+    expect(store.getSnapshot().elements.map((element) => element.layer)).toEqual([0, 1]);
+  });
+
   it("replaces moved elements as one undoable change", async () => {
     const repository = createRepository();
     const store = new SceneStore(repository);

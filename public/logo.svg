@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="SketchBoard logo">
+  <rect width="96" height="96" rx="24" fill="#171717" />
+  <path d="M24 48 58 14h14L38 48h34L38 82H24l34-34H24Z" fill="#ffffff" />
+  <path d="M58 14h14L38 48H24l34-34Z" fill="#7cda9d" />
+</svg>

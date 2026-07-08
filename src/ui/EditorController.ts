@@ -29,10 +29,12 @@ import {
   translateElement,
 } from "../domain/selection";
 import type { SceneStore } from "../application/SceneStore";
+import type { LayerOrderCommand } from "../application/SceneStore";
 import type { CanvasRenderOptions } from "./CanvasRenderer";
 
 type RenderPreview = (options?: CanvasRenderOptions) => void;
 type TogglePanning = (isPanning: boolean) => void;
+type SelectionChangeListener = () => void;
 type TextEditorOptions = {
   initialText?: string;
   fontSize?: number;
@@ -85,6 +87,7 @@ export class EditorController {
     private readonly renderPreview: RenderPreview,
     private readonly togglePanning: TogglePanning,
     private readonly openTextEditor: (screenPoint: Point, options: TextEditorOptions) => void,
+    private readonly onSelectionChange: SelectionChangeListener = () => {},
   ) {
     this.bind();
     this.canvas.dataset.tool = this.activeTool;
@@ -148,6 +151,20 @@ export class EditorController {
     this.renderSelection();
 
     return true;
+  }
+
+  getSelectedElementIds(): Set<string> {
+    return new Set(this.selectedElementIds);
+  }
+
+  updateSelectionLayer(command: LayerOrderCommand): boolean {
+    const didUpdate = this.store.updateElementsLayer(this.selectedElementIds, command);
+
+    if (didUpdate) {
+      this.renderSelection();
+    }
+
+    return didUpdate;
   }
 
   refreshSelection(): void {
@@ -381,7 +398,8 @@ export class EditorController {
 
   private startMoveIfPossible(point: Point): boolean {
     const snapshot = this.store.getSnapshot();
-    const hitElement = getElementAtPoint(snapshot.elements, point, 8 / snapshot.viewport.zoom);
+    const tolerance = 8 / snapshot.viewport.zoom;
+    const hitElement = getElementAtPoint(snapshot.elements, point, tolerance);
 
     if (!hitElement) {
       return false;
@@ -598,6 +616,7 @@ export class EditorController {
 
   private renderSelection(): void {
     this.renderCurrent();
+    this.onSelectionChange();
   }
 
   private renderCurrent(options: CanvasRenderOptions = {}): void {

@@ -21,6 +21,7 @@ export type ElementStyle = {
 export type BaseElement = {
   id: string;
   type: Tool;
+  layer: number;
   createdAt: number;
   updatedAt: number;
   style: ElementStyle;
@@ -76,6 +77,8 @@ export const DEFAULT_VIEWPORT: Viewport = {
   zoom: 1,
 };
 
+export const DEFAULT_LAYER = 0;
+
 const MIN_TEXT_WIDTH = 120;
 const TEXT_WIDTH_RATIO = 14 / 24;
 
@@ -92,12 +95,13 @@ export const createElementId = (): string =>
 
 export const now = (): number => Date.now();
 
-export const createBrushElement = (point: Point): BrushElement => {
+export const createBrushElement = (point: Point, layer = DEFAULT_LAYER): BrushElement => {
   const timestamp = now();
 
   return {
     id: createElementId(),
     type: "brush",
+    layer,
     points: [point],
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -105,12 +109,17 @@ export const createBrushElement = (point: Point): BrushElement => {
   };
 };
 
-export const createTextElement = (point: Point, text: string): TextElement => {
+export const createTextElement = (
+  point: Point,
+  text: string,
+  layer = DEFAULT_LAYER,
+): TextElement => {
   const timestamp = now();
 
   return {
     id: createElementId(),
     type: "text",
+    layer,
     x: point.x,
     y: point.y,
     text,
@@ -133,12 +142,14 @@ export const createShapeElement = (
   type: ShapeElement["type"],
   origin: Point,
   target: Point,
+  layer = DEFAULT_LAYER,
 ): ShapeElement => {
   const timestamp = now();
 
   return {
     id: createElementId(),
     type,
+    layer,
     x: origin.x,
     y: origin.y,
     width: target.x - origin.x,
@@ -149,12 +160,17 @@ export const createShapeElement = (
   };
 };
 
-export const createArrowElement = (origin: Point, target: Point): ArrowElement => {
+export const createArrowElement = (
+  origin: Point,
+  target: Point,
+  layer = DEFAULT_LAYER,
+): ArrowElement => {
   const timestamp = now();
 
   return {
     id: createElementId(),
     type: "arrow",
+    layer,
     start: origin,
     end: target,
     createdAt: timestamp,

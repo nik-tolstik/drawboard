@@ -9,15 +9,47 @@ import {
   cloneElementsAt,
   getElementAtPoint,
   getElementBounds,
+  getElementsInLayerOrder,
   getElementsIntersectingRect,
 } from "./selection";
 
 describe("selection", () => {
-  it("finds the topmost element at a point", () => {
+  it("finds the latest element at a point when layers match", () => {
     const square = createShapeElement("square", { x: 0, y: 0 }, { x: 80, y: 80 });
     const text = createTextElement({ x: 10, y: 10 }, "note");
 
     expect(getElementAtPoint([square, text], { x: 20, y: 20 })?.id).toBe(text.id);
+  });
+
+  it("uses higher layers for hit-test priority", () => {
+    const lowerText = { ...createTextElement({ x: 10, y: 10 }, "lower"), layer: 1 };
+    const higherText = { ...createTextElement({ x: 10, y: 10 }, "higher"), layer: 5 };
+
+    expect(getElementAtPoint([higherText, lowerText], { x: 20, y: 20 })?.id).toBe(higherText.id);
+    expect(getElementsInLayerOrder([higherText, lowerText]).map((element) => element.id)).toEqual([
+      lowerText.id,
+      higherText.id,
+    ]);
+  });
+
+  it("selects an unfilled square only by its border", () => {
+    const square = createShapeElement("square", { x: 0, y: 0 }, { x: 80, y: 80 });
+
+    expect(getElementAtPoint([square], { x: 40, y: 40 })).toBeUndefined();
+    expect(getElementAtPoint([square], { x: 2, y: 40 })?.id).toBe(square.id);
+  });
+
+  it("selects a filled square by its full area", () => {
+    const square = createShapeElement("square", { x: 0, y: 0 }, { x: 80, y: 80 });
+    const filledSquare = {
+      ...square,
+      style: {
+        ...square.style,
+        fill: "#ffffff",
+      },
+    };
+
+    expect(getElementAtPoint([filledSquare], { x: 40, y: 40 })?.id).toBe(square.id);
   });
 
   it("selects elements that intersect an area", () => {

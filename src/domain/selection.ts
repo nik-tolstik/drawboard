@@ -19,6 +19,14 @@ import {
 
 const TEXT_LINE_HEIGHT = 1.3;
 
+export const getElementsInLayerOrder = (elements: DrawingElement[]): DrawingElement[] =>
+  elements
+    .map((element, index) => ({ element, index }))
+    .sort(
+      (first, second) => first.element.layer - second.element.layer || first.index - second.index,
+    )
+    .map(({ element }) => element);
+
 export const getElementBounds = (element: DrawingElement): Rect => {
   if (element.type === "brush") {
     return getPointsBounds(element.points);
@@ -84,7 +92,7 @@ export const isElementHit = (element: DrawingElement, point: Point, tolerance = 
     return isDiamondHit(element, point, tolerance);
   }
 
-  return isPointNearRect(point, element, tolerance);
+  return isSquareHit(element, point, tolerance);
 };
 
 export const getElementAtPoint = (
@@ -92,8 +100,10 @@ export const getElementAtPoint = (
   point: Point,
   tolerance = 6,
 ): DrawingElement | undefined => {
-  for (let index = elements.length - 1; index >= 0; index -= 1) {
-    const element = elements[index];
+  const layeredElements = getElementsInLayerOrder(elements);
+
+  for (let index = layeredElements.length - 1; index >= 0; index -= 1) {
+    const element = layeredElements[index];
 
     if (element && isElementHit(element, point, tolerance)) {
       return element;
@@ -214,6 +224,23 @@ const isPointNearRect = (point: Point, rect: Rect, tolerance: number): boolean =
   return Math.hypot(dx, dy) <= tolerance;
 };
 
+const isPointNearRectBorder = (point: Point, rect: Rect, tolerance: number): boolean => {
+  const normalized = normalizeRect(rect);
+  const minX = normalized.x - tolerance;
+  const maxX = normalized.x + normalized.width + tolerance;
+  const minY = normalized.y - tolerance;
+  const maxY = normalized.y + normalized.height + tolerance;
+  const nearLeft = Math.abs(point.x - normalized.x) <= tolerance;
+  const nearRight = Math.abs(point.x - (normalized.x + normalized.width)) <= tolerance;
+  const nearTop = Math.abs(point.y - normalized.y) <= tolerance;
+  const nearBottom = Math.abs(point.y - (normalized.y + normalized.height)) <= tolerance;
+
+  return (
+    ((nearLeft || nearRight) && point.y >= minY && point.y <= maxY) ||
+    ((nearTop || nearBottom) && point.x >= minX && point.x <= maxX)
+  );
+};
+
 const rectsIntersect = (first: Rect, second: Rect): boolean => {
   const a = normalizeRect(first);
   const b = normalizeRect(second);
@@ -255,6 +282,11 @@ const isArrowHit = (element: ArrowElement, point: Point, tolerance: number): boo
   );
 };
 
+const isSquareHit = (element: ShapeElement, point: Point, tolerance: number): boolean =>
+  hasVisibleFill(element.style.fill)
+    ? isPointNearRect(point, element, tolerance)
+    : isPointNearRectBorder(point, element, tolerance);
+
 const isCircleHit = (element: ShapeElement, point: Point, tolerance: number): boolean => {
   const rect = normalizeRect(element);
   const rx = rect.width / 2;
@@ -269,6 +301,54 @@ const isCircleHit = (element: ShapeElement, point: Point, tolerance: number): bo
   const edgeDistance = Math.abs(Math.sqrt(normalizedDistance) - 1) * Math.min(rx, ry);
 
   return normalizedDistance <= 1 || edgeDistance <= tolerance;
+};
+
+const hasVisibleFill = (fill: string): boolean => {
+  const normalized = fill.trim().toLowerCase();
+
+  if (!normalized || normalized === "transparent" || normalized === "none") {
+    return false;
+  }
+
+  const rgbaMatch = normalized.match(/^rgba?\((.*)\)$/);
+
+  if (rgbaMatch) {
+    const body = rgbaMatch[1] ?? "";
+    const slashAlpha = body.split("/")[1]?.trim();
+
+    if (slashAlpha) {
+      return parseAlpha(slashAlpha) > 0;
+    }
+
+    const parts = body.split(",").map((part) => part.trim());
+
+    if (normalized.startsWith("rgba") && parts[3]) {
+      return parseAlpha(parts[3]) > 0;
+    }
+
+    return true;
+  }
+
+  const hexMatch = normalized.match(/^#([0-9a-f]{4}|[0-9a-f]{8})$/);
+
+  if (hexMatch) {
+    const value = hexMatch[1] ?? "";
+    const alpha = value.length === 4 ? value[3] + value[3] : value.slice(6, 8);
+
+    return Number.parseInt(alpha, 16) > 0;
+  }
+
+  return true;
+};
+
+const parseAlpha = (value: string): number => {
+  const alpha = Number.parseFloat(value);
+
+  if (!Number.isFinite(alpha)) {
+    return 1;
+  }
+
+  return value.endsWith("%") ? alpha / 100 : alpha;
 };
 
 const isDiamondHit = (element: ShapeElement, point: Point, tolerance: number): boolean => {

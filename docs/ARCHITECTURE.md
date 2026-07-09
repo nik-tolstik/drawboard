@@ -79,7 +79,7 @@ Shared code must not import from app, pages, widgets, features, or entities.
 - Phone and touch-screen two-finger pinch zooms the viewport around the gesture midpoint.
 - The zoom controls and `Ctrl`/`Cmd` with `+`, `-`, or `0` zoom the viewport around the canvas center.
 - Select tool supports click selection, Shift-click additive toggling, area selection, and dragging selected elements.
-- Object color settings appear for drawing tools and selected elements.
+- Object settings appear for drawing tools and selected elements, using preset stroke/fill swatches, including transparent presets, and stroke-width presets; selected elements also show layer controls in the same left panel.
 - `Ctrl+C` copies selected elements into an in-memory clipboard.
 - `Ctrl+V` pastes copies at the last cursor world position.
 - `Delete` and `Backspace` remove selected elements.

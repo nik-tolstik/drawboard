@@ -5,7 +5,7 @@ import { Separator } from "@/shared/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/shared/ui/tooltip";
 import { ToggleGroup, ToggleGroupItem } from "@/shared/ui/toggle-group";
 
-import { LAYER_CONTROLS, TOOLS, getToolTitle, isObjectTool } from "../config/editorConfig";
+import { TOOLS, getToolTitle, isObjectTool } from "../config/editorConfig";
 import { useEditorRuntime } from "../model/useEditorRuntime";
 import { EditorIcon } from "./EditorIcon";
 import { ObjectSettingsPanel } from "./ObjectSettingsPanel";
@@ -27,8 +27,10 @@ export function EditorWidget() {
     fillColor,
     hasSelection,
     isPanning,
+    lineWidth,
     saveState,
     setFillColor,
+    setLineWidth,
     setStrokeColor,
     setTool,
     strokeColor,
@@ -137,9 +139,13 @@ export function EditorWidget() {
         />
         <ObjectSettingsPanel
           fillColor={fillColor}
+          hasSelection={hasSelection}
+          lineWidth={lineWidth}
           setFillColor={setFillColor}
+          setLineWidth={setLineWidth}
           setStrokeColor={setStrokeColor}
           strokeColor={strokeColor}
+          updateSelectionLayer={updateSelectionLayer}
           visible={showObjectSettings}
         />
         <aside className="help-panel" aria-label="Canvas tips">
@@ -179,28 +185,6 @@ export function EditorWidget() {
           >
             <span aria-hidden="true">+</span>
           </Button>
-        </section>
-        <section
-          aria-label="Layer controls"
-          className="layer-panel"
-          data-layer-panel
-          hidden={!hasSelection}
-        >
-          {LAYER_CONTROLS.map((control) => (
-            <Button
-              key={control.action}
-              aria-label={control.label}
-              className="icon-button"
-              data-layer-action={control.action}
-              disabled={!hasSelection}
-              onClick={() => updateSelectionLayer(control.action)}
-              title={control.label}
-              type="button"
-              variant="ghost"
-            >
-              <EditorIcon name={control.icon} />
-            </Button>
-          ))}
         </section>
       </div>
     </main>

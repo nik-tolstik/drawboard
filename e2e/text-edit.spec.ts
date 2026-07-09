@@ -14,6 +14,7 @@ type PersistedElement = {
   height?: number;
   style?: {
     fill?: string;
+    lineWidth?: number;
     stroke?: string;
   };
 };
@@ -35,6 +36,8 @@ type CanvasRegion = {
   width: number;
   height: number;
 };
+
+const TRANSPARENT_COLOR = "rgba(255, 255, 255, 0)";
 
 const readPersistedScene = async (page: Page): Promise<PersistedScene | undefined> =>
   page.evaluate(
@@ -150,21 +153,15 @@ const dragCanvas = async (
 const absoluteSize = (value: number | undefined): number => Math.abs(value ?? 0);
 
 const setFillColor = async (page: Page, color: string): Promise<void> => {
-  await page.locator("[data-fill-color]").evaluate((element, value) => {
-    const input = element as HTMLInputElement;
-
-    input.value = value;
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  }, color);
+  await page.locator(`[data-fill-color][data-color="${color}"]`).click();
 };
 
 const setStrokeColor = async (page: Page, color: string): Promise<void> => {
-  await page.locator("[data-stroke-color]").evaluate((element, value) => {
-    const input = element as HTMLInputElement;
+  await page.locator(`[data-stroke-color][data-color="${color}"]`).click();
+};
 
-    input.value = value;
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }, color);
+const setStrokeWidth = async (page: Page, lineWidth: number): Promise<void> => {
+  await page.locator(`[data-stroke-width][data-width="${lineWidth}"]`).click();
 };
 
 const wheelCanvas = async (
@@ -256,7 +253,7 @@ test("pans the canvas with the Pan tool without creating history entries", async
   await textEditor.press("Control+Enter");
 
   await expect.poll(() => readPersistedElements(page)).toHaveLength(1);
-  await expect(page.locator("[data-layer-panel]")).toBeVisible();
+  await expect(page.locator("[data-object-settings-panel] [data-layer-panel]")).toBeVisible();
 
   const viewportBeforePan = await readPersistedViewport(page);
 
@@ -266,7 +263,7 @@ test("pans the canvas with the Pan tool without creating history entries", async
 
   await expect(canvas).toHaveAttribute("data-panning", "false");
   await expect.poll(() => readPersistedElements(page)).toHaveLength(1);
-  await expect(page.locator("[data-layer-panel]")).toBeVisible();
+  await expect(page.locator("[data-object-settings-panel] [data-layer-panel]")).toBeVisible();
   await expect
     .poll(() => readPersistedViewport(page))
     .toMatchObject({
@@ -343,6 +340,19 @@ test("shows object settings for drawing tools and selected objects", async ({ pa
 
   await page.getByRole("button", { name: "Text" }).click();
   await expect(objectSettingsPanel).toBeVisible();
+  await expect(objectSettingsPanel.locator('input[type="color"]')).toHaveCount(0);
+  await expect(objectSettingsPanel.locator("[data-stroke-color]")).toHaveCount(7);
+  await expect(objectSettingsPanel.locator("[data-fill-color]")).toHaveCount(7);
+  await expect(
+    objectSettingsPanel.getByRole("button", { name: "Stroke Transparent" }),
+  ).toHaveAttribute("data-color", TRANSPARENT_COLOR);
+  await expect(
+    objectSettingsPanel.getByRole("button", { name: "Fill Transparent" }),
+  ).toHaveAttribute("data-color", TRANSPARENT_COLOR);
+  await expect(objectSettingsPanel.locator("[data-stroke-width]")).toHaveCount(3);
+  await expect(
+    objectSettingsPanel.locator('[data-stroke-width][aria-pressed="true"]'),
+  ).toHaveAttribute("data-width", "2");
   await canvas.click({ position: { x: 320, y: 260 } });
   await expect(textEditor).toBeVisible();
   await textEditor.fill("Styled note");
@@ -352,8 +362,9 @@ test("shows object settings for drawing tools and selected objects", async ({ pa
   await expect(objectSettingsPanel).toBeVisible();
   await expect.poll(() => readPersistedElements(page)).toHaveLength(1);
 
-  await setStrokeColor(page, "#336699");
-  await setFillColor(page, "#ccddaa");
+  await setStrokeColor(page, "#61746b");
+  await setFillColor(page, "#e8f1ec");
+  await setStrokeWidth(page, 4);
 
   await expect
     .poll(async () => {
@@ -362,8 +373,41 @@ test("shows object settings for drawing tools and selected objects", async ({ pa
       return element?.style;
     })
     .toMatchObject({
-      stroke: "#336699",
-      fill: "#ccddaa",
+      stroke: "#61746b",
+      fill: "#e8f1ec",
+      lineWidth: 4,
+    });
+
+  await page.keyboard.press("5");
+  await expectActiveTool(page, "rectangle");
+  await dragCanvas(page, { x: 120, y: 130 }, { x: 220, y: 180 });
+  await expectActiveTool(page, "select");
+
+  await expect
+    .poll(async () => {
+      const elements = await readPersistedElements(page);
+      const rectangle = elements.find((element) => element.type === "rectangle");
+
+      return rectangle?.style?.lineWidth;
+    })
+    .toBe(4);
+
+  await canvas.click({ position: { x: 170, y: 155 } });
+  await expect(objectSettingsPanel).toBeVisible();
+
+  await setStrokeColor(page, TRANSPARENT_COLOR);
+  await setFillColor(page, TRANSPARENT_COLOR);
+
+  await expect
+    .poll(async () => {
+      const elements = await readPersistedElements(page);
+      const rectangle = elements.find((element) => element.type === "rectangle");
+
+      return rectangle?.style;
+    })
+    .toMatchObject({
+      stroke: TRANSPARENT_COLOR,
+      fill: TRANSPARENT_COLOR,
     });
 });
 
@@ -788,7 +832,7 @@ test("places multi-point arrows with clicks and finishes on the last point", asy
   await expectActiveTool(page, "select");
 });
 
-test("moves selected elements with the bottom layer panel", async ({ page }) => {
+test("moves selected elements with the left layer panel", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Text" })).toBeVisible();
 
@@ -814,16 +858,21 @@ test("moves selected elements with the bottom layer panel", async ({ page }) => 
   await page.getByRole("button", { name: "Select" }).click();
   await canvas.click({ position: { x: textPoint.x + 8, y: textPoint.y + 8 } });
 
-  await expect(page.getByRole("button", { name: "Назад", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Назад", exact: true }).click();
+  const objectSettingsPanel = page.locator("[data-object-settings-panel]");
+  const layerPanel = objectSettingsPanel.locator("[data-layer-panel]");
+
+  await expect(layerPanel).toBeVisible();
+  await expect(page.locator(".canvas-frame > [data-layer-panel]")).toHaveCount(0);
+  await expect(layerPanel.getByRole("button", { name: "Назад", exact: true })).toBeVisible();
+  await layerPanel.getByRole("button", { name: "Назад", exact: true }).click();
   await expect.poll(() => readPersistedLayers(page)).toEqual([1, 0]);
 
-  await page.getByRole("button", { name: "Вперёд", exact: true }).click();
+  await layerPanel.getByRole("button", { name: "Вперёд", exact: true }).click();
   await expect.poll(() => readPersistedLayers(page)).toEqual([0, 1]);
 
-  await page.getByRole("button", { name: "Полностью назад" }).click();
+  await layerPanel.getByRole("button", { name: "Полностью назад" }).click();
   await expect.poll(() => readPersistedLayers(page)).toEqual([1, 0]);
 
-  await page.getByRole("button", { name: "Полностью вперёд" }).click();
+  await layerPanel.getByRole("button", { name: "Полностью вперёд" }).click();
   await expect.poll(() => readPersistedLayers(page)).toEqual([0, 1]);
 });

@@ -257,26 +257,129 @@ button {
 }
 
 .color-control {
-  display: inline-flex;
-  align-items: center;
+  display: grid;
   gap: 7px;
   min-height: 36px;
-  padding: 0 8px;
+  margin: 0;
+  padding: 7px;
   border-radius: 7px;
+  border: 0;
   background: rgba(22, 22, 22, 0.05);
   color: var(--editor-muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.color-control input {
-  width: 24px;
-  height: 24px;
+.color-control legend {
+  padding: 0;
+}
+
+.color-control__swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 22px);
+  gap: 6px;
+}
+
+.color-swatch {
+  position: relative;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: 1px solid var(--editor-border-strong);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 7px;
   cursor: pointer;
+  transition:
+    box-shadow 150ms ease,
+    transform 150ms ease;
+  overflow: hidden;
+}
+
+.color-swatch:hover {
+  box-shadow: 0 0 0 3px rgba(22, 22, 22, 0.08);
+}
+
+.color-swatch:active {
+  transform: translateY(1px);
+}
+
+.color-swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--editor-surface),
+    0 0 0 4px var(--editor-accent);
+}
+
+.color-swatch--transparent {
+  background-image:
+    linear-gradient(
+      135deg,
+      transparent calc(50% - 1px),
+      rgba(196, 62, 62, 0.8) calc(50% - 1px),
+      rgba(196, 62, 62, 0.8) calc(50% + 1px),
+      transparent calc(50% + 1px)
+    ),
+    repeating-conic-gradient(#ffffff 0% 25%, #dfe3ea 0% 50%);
+  background-position: 0 0;
+  background-size:
+    100% 100%,
+    8px 8px;
+}
+
+.stroke-width-control__options {
+  display: grid;
+  grid-template-columns: repeat(3, 24px);
+  gap: 6px;
+}
+
+.stroke-width-option {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: 7px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  cursor: pointer;
+  transition:
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.stroke-width-option:hover {
+  box-shadow: 0 0 0 3px rgba(22, 22, 22, 0.08);
+}
+
+.stroke-width-option:active {
+  transform: translateY(1px);
+}
+
+.stroke-width-option[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--editor-surface),
+    0 0 0 4px var(--editor-accent);
+}
+
+.stroke-width-option__line {
+  width: 14px;
+  min-height: 1px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.layer-control__buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 36px);
+  gap: 4px;
+}
+
+.layer-control__button:disabled {
+  color: rgba(22, 22, 22, 0.3);
+  cursor: default;
+}
+
+.layer-control__button:disabled:hover {
+  background: transparent;
 }
 
 .object-settings-panel {
@@ -287,7 +390,7 @@ button {
   display: inline-flex;
   flex-direction: column;
   gap: 6px;
-  width: 118px;
+  width: 104px;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -301,7 +404,6 @@ button {
 }
 
 .object-settings-panel .color-control {
-  justify-content: space-between;
   width: 100%;
 }
 
@@ -444,36 +546,6 @@ button {
   transform: translateY(1px);
 }
 
-.layer-panel {
-  position: fixed;
-  left: 50%;
-  bottom: 16px;
-  z-index: 9;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 5px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--editor-surface);
-  box-shadow: 0 12px 30px rgba(16, 16, 16, 0.1);
-  backdrop-filter: blur(18px);
-  transform: translateX(-50%);
-}
-
-.layer-panel[hidden] {
-  display: none;
-}
-
-.layer-panel .icon-button:disabled {
-  color: rgba(22, 22, 22, 0.3);
-  cursor: default;
-}
-
-.layer-panel .icon-button:disabled:hover {
-  background: transparent;
-}
-
 @media (max-width: 760px) {
   .top-bar {
     top: 10px;
@@ -505,11 +577,19 @@ button {
     right: 10px;
     width: auto;
     max-width: calc(100vw - 20px);
-    flex-direction: row;
+    flex-direction: column;
   }
 
   .object-settings-panel .color-control {
-    flex: 1 1 0;
+    width: 100%;
+  }
+
+  .object-settings-panel .color-control__swatches {
+    grid-template-columns: repeat(7, 22px);
+  }
+
+  .object-settings-panel .layer-control__buttons {
+    grid-template-columns: repeat(4, 36px);
   }
 
   .help-panel {
@@ -522,10 +602,6 @@ button {
   .zoom-panel {
     right: 10px;
     bottom: 58px;
-  }
-
-  .layer-panel {
-    bottom: 106px;
   }
 }
 

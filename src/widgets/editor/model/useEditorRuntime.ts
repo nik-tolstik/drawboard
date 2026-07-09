@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
+  DEFAULT_STYLE,
   IndexedDbSceneRepository,
   SceneStore,
   type LayerOrderCommand,
@@ -13,8 +14,9 @@ import { CanvasRenderer, type CanvasRenderOptions } from "../lib/CanvasRenderer"
 import { EditorController } from "./EditorController";
 
 const TEXT_EDITOR_VERTICAL_OFFSET = 2;
-const DEFAULT_STROKE_COLOR = "#171717";
-const DEFAULT_FILL_COLOR = "#ffffff";
+const DEFAULT_STROKE_COLOR = DEFAULT_STYLE.stroke;
+const DEFAULT_FILL_COLOR = DEFAULT_STYLE.fill;
+const DEFAULT_LINE_WIDTH = DEFAULT_STYLE.lineWidth;
 
 type TextEditorOptions = {
   initialText?: string;
@@ -41,6 +43,7 @@ export function useEditorRuntime() {
   const [isPanning, setIsPanning] = useState(false);
   const [strokeColor, setStrokeColorState] = useState(DEFAULT_STROKE_COLOR);
   const [fillColor, setFillColorState] = useState(DEFAULT_FILL_COLOR);
+  const [lineWidth, setLineWidthState] = useState(DEFAULT_LINE_WIDTH);
   const [hasSelection, setHasSelection] = useState(false);
   const [zoom, setZoom] = useState(1);
 
@@ -309,6 +312,11 @@ export function useEditorRuntime() {
     controllerRef.current?.setStyle({ fill: color });
   }, []);
 
+  const setLineWidth = useCallback((nextLineWidth: number): void => {
+    setLineWidthState(nextLineWidth);
+    controllerRef.current?.setStyle({ lineWidth: nextLineWidth });
+  }, []);
+
   const clearScene = useCallback((): void => {
     storeRef.current?.clear();
     controllerRef.current?.refreshSelection();
@@ -342,8 +350,10 @@ export function useEditorRuntime() {
     fillColor,
     hasSelection,
     isPanning,
+    lineWidth,
     saveState,
     setFillColor,
+    setLineWidth,
     setStrokeColor,
     setTool,
     strokeColor,

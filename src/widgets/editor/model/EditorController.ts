@@ -97,6 +97,7 @@ export class EditorController {
   private currentStyle: Partial<ElementStyle> = {
     stroke: DEFAULT_STYLE.stroke,
     fill: DEFAULT_STYLE.fill,
+    lineWidth: DEFAULT_STYLE.lineWidth,
   };
   private draft: DrawingElement | undefined;
   private isPanning = false;

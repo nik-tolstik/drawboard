@@ -219,6 +219,20 @@ export class EditorController {
     return true;
   }
 
+  selectAll(): boolean {
+    const elementIds = this.store.getSnapshot().elements.map((element) => element.id);
+
+    this.draft = undefined;
+    this.selectionDrag = undefined;
+    this.moveDrag = undefined;
+    this.arrowPointDrag = undefined;
+    this.arrowCreateDrag = undefined;
+    this.selectedElementIds = new Set(elementIds);
+    this.setTool("select");
+
+    return elementIds.length > 0;
+  }
+
   getSelectedElementIds(): Set<string> {
     return new Set(this.selectedElementIds);
   }

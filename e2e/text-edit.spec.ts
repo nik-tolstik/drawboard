@@ -699,6 +699,35 @@ test("edits canvas text on double click", async ({ page }) => {
   await expect.poll(() => readPersistedTexts(page)).toEqual(["Edited note"]);
 });
 
+test("selects every canvas object with Control+A", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Text" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect.poll(() => readPersistedElements(page)).toEqual([]);
+
+  const canvas = page.locator("[data-canvas]");
+  const textEditor = page.locator("[data-text-editor]");
+
+  await page.getByRole("button", { name: "Text" }).click();
+  await canvas.click({ position: { x: 300, y: 230 } });
+  await expect(textEditor).toBeVisible();
+  await textEditor.fill("Select all note");
+  await textEditor.press("Control+Enter");
+
+  await page.getByRole("button", { name: "Rectangle" }).click();
+  await dragCanvas(page, { x: 260, y: 300 }, { x: 420, y: 380 });
+  await expect.poll(() => readPersistedElements(page)).toHaveLength(2);
+  await expectActiveTool(page, "select");
+
+  await page.keyboard.press("Control+A");
+  await expect(page.locator("[data-object-settings-panel] [data-layer-panel]")).toBeVisible();
+
+  await page.keyboard.press("Delete");
+
+  await expect.poll(() => readPersistedElements(page)).toEqual([]);
+});
+
 test("selects through unfilled rectangle interiors and respects filled ones", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Text" })).toBeVisible();

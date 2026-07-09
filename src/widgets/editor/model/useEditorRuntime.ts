@@ -199,6 +199,7 @@ export function useEditorRuntime() {
 
       const isModifierShortcut = event.ctrlKey || event.metaKey;
       const isZKey = event.key.toLowerCase() === "z" || event.code === "KeyZ";
+      const isAKey = event.key.toLowerCase() === "a" || event.code === "KeyA";
       const isCKey = event.key.toLowerCase() === "c" || event.code === "KeyC";
       const isVKey = event.key.toLowerCase() === "v" || event.code === "KeyV";
       const isZoomInKey =
@@ -230,6 +231,12 @@ export function useEditorRuntime() {
         }
 
         currentController.refreshSelection();
+        return;
+      }
+
+      if (isModifierShortcut && isAKey) {
+        event.preventDefault();
+        currentController.selectAll();
         return;
       }
 

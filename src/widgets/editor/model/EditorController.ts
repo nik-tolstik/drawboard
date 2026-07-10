@@ -6,7 +6,13 @@ import {
   createBrushElement,
   createShapeElement,
   createTextElement,
+  getElementBounds,
+  getResizeHandleAtPoint,
+  getResizeHandlePoints,
+  getTextElementHeight,
   getTextElementWidth,
+  isResizableElement,
+  resizeElement,
   updateArrowPoint,
   updateTextElementText,
   clampViewportZoom,
@@ -16,6 +22,7 @@ import {
   type DrawingElement,
   type ElementStyle,
   type Point,
+  type ResizeHandle,
   type SceneSnapshot,
   type ShapeElement,
   type TextAlign,
@@ -43,7 +50,11 @@ import type { SceneStore } from "@/entities/scene";
 import type { LayerOrderCommand } from "@/entities/scene";
 import type { Viewport } from "@/entities/scene";
 import type { CanvasRenderOptions } from "../lib/CanvasRenderer";
-import { measureTextElementWidth } from "../lib/textMeasurement";
+import {
+  getCanvasTextFont,
+  measureTextElementHeight,
+  measureTextElementWidth,
+} from "../lib/textMeasurement";
 import { getObjectSettingsSnapshot, type ObjectSettingsSnapshot } from "./objectSettings";
 
 type RenderPreview = (options?: CanvasRenderOptions) => void;
@@ -53,6 +64,7 @@ type ToolChangeListener = (tool: Tool) => void;
 type TextEditorOptions = {
   initialText?: string;
   fontSize?: number;
+  width?: number;
   textColor?: string;
   textAlign?: TextAlign;
   onCommit: (text: string) => void;
@@ -77,6 +89,13 @@ type MoveDrag = {
 type ArrowPointDrag = {
   pointIndex: number;
   baseElement: ArrowElement;
+  current: Point;
+  dragged: boolean;
+};
+
+type ResizeDrag = {
+  handle: ResizeHandle;
+  baseElement: ShapeElement | TextElement;
   current: Point;
   dragged: boolean;
 };
@@ -116,6 +135,7 @@ export class EditorController {
   private isPanning = false;
   private selectionDrag: SelectionDrag | undefined;
   private moveDrag: MoveDrag | undefined;
+  private resizeDrag: ResizeDrag | undefined;
   private arrowPointDrag: ArrowPointDrag | undefined;
   private arrowCreateDrag: ArrowCreateDrag | undefined;
   private arrowDraftPoints: Point[] | undefined;
@@ -168,11 +188,13 @@ export class EditorController {
     }
 
     if (this.activeTool === tool) {
+      this.canvas.style.cursor = "";
       this.renderSelection();
       return;
     }
 
     this.activeTool = tool;
+    this.canvas.style.cursor = "";
     this.canvas.dataset.tool = tool;
     this.onToolChange(tool);
     this.renderSelection();
@@ -292,6 +314,7 @@ export class EditorController {
     this.draft = undefined;
     this.selectionDrag = undefined;
     this.moveDrag = undefined;
+    this.resizeDrag = undefined;
     this.arrowPointDrag = undefined;
     this.arrowCreateDrag = undefined;
     this.selectedElementIds = new Set(elementIds);
@@ -389,16 +412,16 @@ export class EditorController {
       this.openTextEditor(screenPoint, {
         textAlign: this.currentTextAlign,
         onCommit: (text) => {
-          const trimmedText = text.trim();
-
-          if (trimmedText.length > 0) {
+          if (text.trim().length > 0) {
             const draftElement = {
-              ...createTextElement(worldPoint, trimmedText),
+              ...createTextElement(worldPoint, text),
               textAlign: this.currentTextAlign,
             };
+            const width = this.measureTextWidth(text, draftElement.fontSize);
             const element = this.applyCurrentStyle({
               ...draftElement,
-              width: this.measureTextWidth(trimmedText, draftElement.fontSize),
+              width,
+              height: this.measureTextHeight(text, width, draftElement.fontSize),
             });
             this.store.addElement(element);
             this.selectedElementIds = new Set([element.id]);
@@ -437,6 +460,10 @@ export class EditorController {
     const worldPoint = this.getWorldPoint(event);
 
     if (this.pointerId === undefined) {
+      if (this.activeTool === "select") {
+        this.updateResizeCursor(worldPoint);
+      }
+
       if (this.arrowDraftPoints) {
         this.updateArrowDraftPreview(worldPoint);
       }
@@ -460,6 +487,11 @@ export class EditorController {
 
     if (this.arrowPointDrag) {
       this.updateArrowPointDrag(worldPoint);
+      return;
+    }
+
+    if (this.resizeDrag) {
+      this.updateResize(worldPoint, event.shiftKey);
       return;
     }
 
@@ -502,6 +534,11 @@ export class EditorController {
 
     if (this.arrowPointDrag) {
       this.endArrowPointDrag(event);
+      return;
+    }
+
+    if (this.resizeDrag) {
+      this.endResize(event);
       return;
     }
 
@@ -699,6 +736,7 @@ export class EditorController {
     this.draft = undefined;
     this.selectionDrag = undefined;
     this.moveDrag = undefined;
+    this.resizeDrag = undefined;
     this.arrowPointDrag = undefined;
     this.arrowCreateDrag = undefined;
     this.arrowDraftPoints = undefined;
@@ -709,6 +747,7 @@ export class EditorController {
     this.openTextEditor(this.getElementScreenPoint(textElement), {
       initialText: textElement.text,
       fontSize: textElement.fontSize,
+      width: textElement.width,
       textColor: textElement.style.stroke,
       textAlign: textElement.textAlign,
       onCommit: (text) => this.commitTextElementEdit(textElement, text),
@@ -949,6 +988,10 @@ export class EditorController {
   }
 
   private startSelectInteraction(event: PointerEvent, point: Point): void {
+    if (this.startResizeIfPossible(point)) {
+      return;
+    }
+
     if (!event.shiftKey && this.startArrowPointDragIfPossible(point)) {
       return;
     }
@@ -958,6 +1001,32 @@ export class EditorController {
     }
 
     this.startSelection(event, point);
+  }
+
+  private startResizeIfPossible(point: Point): boolean {
+    const [element] = this.getSelectedElements();
+
+    if (this.selectedElementIds.size !== 1 || !element || !isResizableElement(element)) {
+      return false;
+    }
+
+    const zoom = this.store.getSnapshot().viewport.zoom;
+    const handle = getResizeHandleAtPoint(getElementBounds(element), point, 10 / zoom);
+
+    if (!handle) {
+      return false;
+    }
+
+    this.resizeDrag = {
+      handle,
+      baseElement: element,
+      current: point,
+      dragged: false,
+    };
+    this.setResizeCursor(handle);
+    this.renderSelection();
+
+    return true;
   }
 
   private startArrowPointDragIfPossible(point: Point): boolean {
@@ -1100,6 +1169,49 @@ export class EditorController {
     });
   }
 
+  private updateResize(point: Point, preserveAspectRatio: boolean): void {
+    const resizeDrag = this.resizeDrag;
+
+    if (!resizeDrag) {
+      return;
+    }
+
+    const handlePoint = this.getResizeHandlePoint(resizeDrag.baseElement, resizeDrag.handle);
+    resizeDrag.current = point;
+    resizeDrag.dragged =
+      resizeDrag.dragged || distance(point, handlePoint) >= MIN_SELECTION_DRAG_DISTANCE;
+
+    if (!resizeDrag.dragged) {
+      return;
+    }
+
+    const preview = this.getResizedElement(resizeDrag, preserveAspectRatio);
+
+    this.renderCurrent({
+      hiddenElementIds: new Set([preview.id]),
+      preview,
+    });
+  }
+
+  private endResize(event: PointerEvent): void {
+    const resizeDrag = this.resizeDrag;
+
+    if (!resizeDrag) {
+      return;
+    }
+
+    if (resizeDrag.dragged) {
+      this.store.replaceElement(this.getResizedElement(resizeDrag, event.shiftKey));
+    } else {
+      this.renderSelection();
+    }
+
+    this.resizeDrag = undefined;
+    this.pointerId = undefined;
+    this.releasePointer(event.pointerId);
+    this.updateResizeCursor(this.getWorldPoint(event));
+  }
+
   private endArrowPointDrag(event: PointerEvent): void {
     const arrowPointDrag = this.arrowPointDrag;
 
@@ -1227,9 +1339,7 @@ export class EditorController {
   }
 
   private commitTextElementEdit(originalElement: TextElement, text: string): void {
-    const trimmedText = text.trim();
-
-    if (trimmedText.length === 0) {
+    if (text.trim().length === 0) {
       this.store.removeElements(new Set([originalElement.id]));
       this.selectedElementIds = new Set<string>();
       this.finishTextElementEdit(originalElement.id);
@@ -1245,16 +1355,18 @@ export class EditorController {
       return;
     }
 
-    const width = this.measureTextWidth(trimmedText, currentElement.fontSize);
+    const width = currentElement.width;
+    const height = this.measureTextHeight(text, width, currentElement.fontSize);
 
-    if (currentElement.text === trimmedText && Math.abs(currentElement.width - width) < 0.5) {
+    if (currentElement.text === text && Math.abs(currentElement.height - height) < 0.5) {
       this.finishTextElementEdit(originalElement.id);
       return;
     }
 
     const updatedElement = {
-      ...updateTextElementText(currentElement, trimmedText),
+      ...updateTextElementText(currentElement, text),
       width,
+      height,
     };
     this.store.replaceElement(updatedElement);
     this.selectedElementIds = new Set([updatedElement.id]);
@@ -1268,6 +1380,29 @@ export class EditorController {
       ? measureTextElementWidth(context, text, fontSize)
       : getTextElementWidth(text, fontSize);
   }
+
+  private measureTextHeight(text: string, width: number, fontSize: number): number {
+    const context = this.canvas.getContext("2d");
+
+    return context
+      ? measureTextElementHeight(context, text, width, fontSize)
+      : getTextElementHeight(text, fontSize, width, this.measureTextContent);
+  }
+
+  private measureTextContent = (text: string, fontSize: number): number => {
+    const context = this.canvas.getContext("2d");
+
+    if (!context) {
+      return Math.max(0, getTextElementWidth(text, fontSize) - 6);
+    }
+
+    context.save();
+    context.font = getCanvasTextFont(fontSize);
+    const width = context.measureText(text).width;
+    context.restore();
+
+    return width;
+  };
 
   private finishTextElementEdit(elementId: string): void {
     if (this.editingTextElementId !== elementId) {
@@ -1284,6 +1419,7 @@ export class EditorController {
     }
 
     this.selectedElementIds = new Set<string>();
+    this.canvas.style.cursor = "";
     this.renderSelection();
   }
 
@@ -1332,6 +1468,52 @@ export class EditorController {
       arrowPointDrag.pointIndex,
       arrowPointDrag.current,
     );
+  }
+
+  private getResizedElement(
+    resizeDrag: ResizeDrag,
+    preserveAspectRatio: boolean,
+  ): ShapeElement | TextElement {
+    return resizeElement(resizeDrag.baseElement, resizeDrag.handle, resizeDrag.current, {
+      preserveAspectRatio,
+      measureText: this.measureTextContent,
+    });
+  }
+
+  private getResizeHandlePoint(element: ShapeElement | TextElement, handle: ResizeHandle): Point {
+    return getResizeHandlePoints(getElementBounds(element))[handle];
+  }
+
+  private updateResizeCursor(point: Point): void {
+    const [element] = this.getSelectedElements();
+
+    if (this.selectedElementIds.size !== 1 || !element || !isResizableElement(element)) {
+      this.canvas.style.cursor = "";
+      return;
+    }
+
+    const zoom = this.store.getSnapshot().viewport.zoom;
+    const handle = getResizeHandleAtPoint(getElementBounds(element), point, 10 / zoom);
+
+    if (handle) {
+      this.setResizeCursor(handle);
+    } else {
+      this.canvas.style.cursor = "";
+    }
+  }
+
+  private setResizeCursor(handle: ResizeHandle): void {
+    if (handle === "n" || handle === "s") {
+      this.canvas.style.cursor = "ns-resize";
+      return;
+    }
+
+    if (handle === "e" || handle === "w") {
+      this.canvas.style.cursor = "ew-resize";
+      return;
+    }
+
+    this.canvas.style.cursor = handle === "nw" || handle === "se" ? "nwse-resize" : "nesw-resize";
   }
 
   private getSelectedElements(): DrawingElement[] {
@@ -1474,6 +1656,7 @@ export class EditorController {
     this.draft = undefined;
     this.selectionDrag = undefined;
     this.moveDrag = undefined;
+    this.resizeDrag = undefined;
     this.arrowPointDrag = undefined;
     this.cancelArrowDraft();
     this.isPanning = false;
@@ -1490,6 +1673,7 @@ export class EditorController {
 
   private startPan(event: PointerEvent): void {
     event.preventDefault();
+    this.canvas.style.cursor = "";
     const viewport = this.store.getSnapshot().viewport;
     this.isPanning = true;
     this.panStart = this.getScreenPoint(event);

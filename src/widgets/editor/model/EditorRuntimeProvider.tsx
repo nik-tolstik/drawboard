@@ -15,7 +15,7 @@ import {
 
 import { CanvasRenderer, type CanvasRenderOptions } from "../lib/CanvasRenderer";
 import { getInlineTextEditorMetrics } from "../lib/textEditorMetrics";
-import { measureTextElementWidth } from "../lib/textMeasurement";
+import { measureTextElementHeight, measureTextElementWidth } from "../lib/textMeasurement";
 import { EditorController } from "./EditorController";
 import { getEditorShortcut } from "./editorShortcuts";
 import type { ObjectSettingsSnapshot } from "./objectSettings";
@@ -34,6 +34,7 @@ type EditorRuntimeProviderProps = {
 type TextEditorOptions = {
   initialText?: string;
   fontSize?: number;
+  width?: number;
   textColor?: string;
   textAlign?: TextAlign;
   onCommit: (text: string) => void;
@@ -127,6 +128,7 @@ export function EditorRuntimeProvider({ children }: EditorRuntimeProviderProps) 
 
       const viewportZoom = latestScene.viewport.zoom;
       const baseFontSize = options.fontSize ?? 24;
+      const shouldWrap = typeof options.width === "number" && options.width > 0;
       let isOpen = true;
       let shouldCommit = true;
 
@@ -139,11 +141,16 @@ export function EditorRuntimeProvider({ children }: EditorRuntimeProviderProps) 
       };
 
       const resizeEditor = (): void => {
+        const context = canvas.getContext("2d");
         const metrics = getInlineTextEditorMetrics({
           text: textEditor.value,
           fontSize: baseFontSize,
+          width: options.width,
           viewportZoom,
           measureTextWidth,
+          measureTextHeight: context
+            ? (text, fontSize, width) => measureTextElementHeight(context, text, width, fontSize)
+            : undefined,
         });
 
         textEditor.style.width = `${metrics.width}px`;
@@ -183,6 +190,9 @@ export function EditorRuntimeProvider({ children }: EditorRuntimeProviderProps) 
       textEditor.style.top = `${screenPoint.y}px`;
       textEditor.style.color = options.textColor ?? "var(--text)";
       textEditor.style.textAlign = options.textAlign ?? DEFAULT_TEXT_ALIGN;
+      textEditor.style.whiteSpace = shouldWrap ? "pre-wrap" : "pre";
+      textEditor.style.overflowWrap = shouldWrap ? "anywhere" : "normal";
+      textEditor.wrap = shouldWrap ? "soft" : "off";
       textEditor.addEventListener("input", resizeEditor);
       textEditor.onblur = close;
       textEditor.onkeydown = (event) => {

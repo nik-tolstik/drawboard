@@ -46,6 +46,7 @@ export type TextElement = BaseElement & {
   textAlign: TextAlign;
   fontSize: number;
   width: number;
+  height: number;
 };
 
 export type ShapeElement = BaseElement & {
@@ -64,7 +65,7 @@ export type ArrowElement = BaseElement & {
 export type DrawingElement = BrushElement | TextElement | ShapeElement | ArrowElement;
 
 export type SceneSnapshot = {
-  version: 1;
+  version: 2;
   elements: DrawingElement[];
   viewport: Viewport;
   updatedAt: number;
@@ -95,6 +96,13 @@ export const TEXT_LINE_HEIGHT = 1.3;
 export const TEXT_MIN_WIDTH = 120;
 export const TEXT_WIDTH_RATIO = 0.62;
 export const TEXT_WIDTH_PADDING = 14;
+export const MIN_TEXT_WIDTH = 24;
+export const MIN_TEXT_FONT_SIZE = 8;
+
+export type TextMeasure = (text: string, fontSize: number) => number;
+
+const estimateTextWidth: TextMeasure = (text, fontSize) =>
+  Array.from(text).length * fontSize * TEXT_WIDTH_RATIO;
 
 export const getTextElementWidth = (text: string, fontSize = DEFAULT_TEXT_FONT_SIZE): number => {
   const longestLineLength = Math.max(1, ...text.split("\n").map((line) => line.length));
@@ -105,8 +113,111 @@ export const getTextElementWidth = (text: string, fontSize = DEFAULT_TEXT_FONT_S
   );
 };
 
-export const getTextElementHeight = (text: string, fontSize = DEFAULT_TEXT_FONT_SIZE): number =>
-  text.split("\n").length * fontSize * TEXT_LINE_HEIGHT;
+const splitTokenToFit = (
+  token: string,
+  availableWidth: number,
+  fontSize: number,
+  measureText: TextMeasure,
+): string[] => {
+  const characters = Array.from(token);
+  const chunks: string[] = [];
+  let chunk = "";
+
+  for (const character of characters) {
+    const candidate = chunk + character;
+
+    if (chunk && measureText(candidate, fontSize) > availableWidth) {
+      chunks.push(chunk);
+      chunk = character;
+    } else {
+      chunk = candidate;
+    }
+  }
+
+  if (chunk || chunks.length === 0) {
+    chunks.push(chunk);
+  }
+
+  return chunks;
+};
+
+const wrapParagraph = (
+  paragraph: string,
+  availableWidth: number,
+  fontSize: number,
+  measureText: TextMeasure,
+): string[] => {
+  const tokens = paragraph.match(/\s+|\S+/gu) ?? [];
+
+  if (tokens.length === 0) {
+    return [""];
+  }
+
+  const lines: string[] = [];
+  let line = "";
+
+  for (const token of tokens) {
+    const candidate = line + token;
+
+    if (measureText(candidate, fontSize) <= availableWidth) {
+      line = candidate;
+      continue;
+    }
+
+    if (/^\s+$/u.test(token) && line) {
+      lines.push(line);
+      line = "";
+      continue;
+    }
+
+    if (line) {
+      lines.push(line);
+      line = "";
+    }
+
+    if (measureText(token, fontSize) <= availableWidth) {
+      line = token;
+      continue;
+    }
+
+    const chunks = splitTokenToFit(token, availableWidth, fontSize, measureText);
+    lines.push(...chunks.slice(0, -1));
+    line = chunks.at(-1) ?? "";
+  }
+
+  if (line || lines.length === 0) {
+    lines.push(line);
+  }
+
+  return lines;
+};
+
+export const getWrappedTextLines = (
+  text: string,
+  width: number,
+  fontSize = DEFAULT_TEXT_FONT_SIZE,
+  measureText: TextMeasure = estimateTextWidth,
+): string[] => {
+  const availableWidth = Math.max(1, width - TEXT_CONTENT_INSET_X * 2);
+
+  return text
+    .split("\n")
+    .flatMap((paragraph) => wrapParagraph(paragraph, availableWidth, fontSize, measureText));
+};
+
+export const getTextElementHeight = (
+  text: string,
+  fontSize = DEFAULT_TEXT_FONT_SIZE,
+  width?: number,
+  measureText?: TextMeasure,
+): number => {
+  const lineCount =
+    width === undefined
+      ? text.split("\n").length
+      : getWrappedTextLines(text, width, fontSize, measureText).length;
+
+  return lineCount * fontSize * TEXT_LINE_HEIGHT;
+};
 
 export const createElementId = (): string =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -146,6 +257,7 @@ export const createTextElement = (
     textAlign: DEFAULT_TEXT_ALIGN,
     fontSize: DEFAULT_TEXT_FONT_SIZE,
     width: getTextElementWidth(text),
+    height: getTextElementHeight(text),
     createdAt: timestamp,
     updatedAt: timestamp,
     style: { ...DEFAULT_STYLE },
@@ -155,7 +267,7 @@ export const createTextElement = (
 export const updateTextElementText = (element: TextElement, text: string): TextElement => ({
   ...element,
   text,
-  width: getTextElementWidth(text, element.fontSize),
+  height: getTextElementHeight(text, element.fontSize, element.width),
   updatedAt: now(),
 });
 

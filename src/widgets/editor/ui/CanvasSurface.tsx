@@ -25,7 +25,7 @@ export function CanvasSurface() {
       />
       <textarea
         ref={textEditorRef}
-        className="absolute z-20 box-border m-0 resize-none overflow-hidden rounded-none border-0 bg-transparent py-0 pr-0 pl-[3px] text-foreground outline-none origin-top-left whitespace-pre break-normal focus:shadow-none [&:not([data-open=true])]:hidden"
+        className="absolute z-20 box-border m-0 resize-none overflow-hidden rounded-none border-0 bg-transparent px-[3px] py-0 text-foreground outline-none origin-top-left focus:shadow-none [&:not([data-open=true])]:hidden"
         data-text-editor
         rows={1}
         spellCheck={false}

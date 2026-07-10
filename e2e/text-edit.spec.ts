@@ -152,15 +152,18 @@ const readTextEditorLineMetrics = async (page: Page): Promise<TextEditorLineMetr
     };
   });
 
-const expectTextEditorToStayOnOneVisualLine = async (page: Page): Promise<void> => {
+const expectTextEditorToStayOnOneVisualLine = async (
+  page: Page,
+  shouldWrap = false,
+): Promise<void> => {
   const metrics = await readTextEditorLineMetrics(page);
 
   expect(metrics.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   expect(metrics.borderTopWidth).toBe("0px");
   expect(metrics.fontFamily).toContain("Comic Sans MS");
   expect(Number.parseFloat(metrics.lineHeight)).toBeCloseTo(24 * TEXT_LINE_HEIGHT, 1);
-  expect(metrics.wrap).toBe("off");
-  expect(metrics.whiteSpace).toBe("pre");
+  expect(metrics.wrap).toBe(shouldWrap ? "soft" : "off");
+  expect(metrics.whiteSpace).toBe(shouldWrap ? "pre-wrap" : "pre");
   expect(metrics.scrollHeight).toBeLessThanOrEqual(metrics.clientHeight + 2);
 };
 
@@ -1172,7 +1175,7 @@ test("keeps long uninterrupted text on one visual editor line", async ({ page })
   await canvas.dblclick({ position: { x: textPoint.x + 6, y: textPoint.y + 6 } });
   await expect(textEditor).toBeVisible();
   await expect(textEditor).toHaveValue(LONG_UNINTERRUPTED_TEXT);
-  await expectTextEditorToStayOnOneVisualLine(page);
+  await expectTextEditorToStayOnOneVisualLine(page, true);
 
   const editorBox = await textEditor.boundingBox();
 

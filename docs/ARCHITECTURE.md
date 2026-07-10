@@ -57,7 +57,7 @@ For standard editor controls, prefer shadcn/ui primitives from `src/shared/ui` b
 - `model/elements.ts`: canonical element types, tools, styles, constructors, and scene types.
 - `model/geometry.ts`: coordinate conversion, rectangle normalization, arrow heads, distances, and shape constraints.
 - `model/selection.ts`: bounds, hit-testing, area selection, translation, cloning, and style application.
-- `model/scene.ts`: empty-scene creation and persisted-scene normalization/migration.
+- `model/scene.ts`: empty-scene creation and defensive normalization of the current persisted format.
 - `model/SceneStore.ts`: active snapshot, undo/redo stacks, subscriptions, and autosave scheduling.
 - `model/sceneRepository.ts`: persistence port consumed by `SceneStore`.
 - `api/indexedDbSceneRepository.ts`: IndexedDB adapter for the default scene record in `sketchboard-db`.
@@ -84,11 +84,13 @@ Shared code must not import from app, pages, widgets, features, or entities.
 - Phone and touch-screen two-finger pinch zooms the viewport around the gesture midpoint.
 - The zoom controls and `Ctrl`/`Cmd` with `+`, `-`, or `0` zoom the viewport around the canvas center.
 - Select tool supports click selection, Shift-click additive toggling, area selection, and dragging selected elements.
+- A single selected rectangle, diamond, ellipse, or text element exposes eight canvas resize handles. Resize previews are transient and the committed resize creates one undo entry; multi-selection does not resize.
 - Object settings appear for drawing tools and selected elements, using preset stroke/fill swatches, including transparent presets, stroke-width presets, and border-radius presets for rectangles and diamonds; selected elements also show layer controls in the same left panel.
 - `Ctrl+C` copies selected elements into an in-memory clipboard.
 - `Ctrl+V` pastes copies at the last cursor world position.
 - `Delete` and `Backspace` remove selected elements.
 - Text uses a temporary inline textarea positioned on the canvas. Committing creates a `text` element.
+- Text elements persist width and height. Horizontal resize reflows text, while vertical and corner resize scale the font and block; manual line breaks remain part of the original text value.
 - `Ctrl+Z` and `Ctrl+Shift+Z` undo/redo element changes.
 - Viewport pan and zoom changes do not create undo history entries.
 - Number shortcuts `1` through `8` select Pan, Select, Brush, Text, Rectangle, Diamond, Ellipse, and Arrow; letter shortcuts remain available.
@@ -99,7 +101,7 @@ Shared code must not import from app, pages, widgets, features, or entities.
 
 Unit tests live next to the code they exercise:
 
-- `*.test.ts` under `src/entities/scene/model` cover geometry, scene migration, selection logic, and state/history behavior.
+- `*.test.ts` under `src/entities/scene/model` cover geometry, scene normalization, selection logic, and state/history behavior.
 
 Run:
 

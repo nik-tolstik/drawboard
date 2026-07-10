@@ -5,7 +5,9 @@ import {
   DEFAULT_TEXT_FONT_SIZE,
   DEFAULT_LAYER,
   DEFAULT_VIEWPORT,
+  MIN_TEXT_WIDTH,
   MIN_ARROW_POINTS,
+  getTextElementHeight,
   getTextElementWidth,
   type DrawingElement,
   type BorderRadius,
@@ -65,11 +67,6 @@ const pointOrDefault = (value: unknown, fallback: Point): Point => {
   };
 };
 
-const getMiddlePoint = (start: Point, end: Point): Point => ({
-  x: (start.x + end.x) / 2,
-  y: (start.y + end.y) / 2,
-});
-
 const normalizeArrowPoints = (element: Record<string, unknown>): Point[] => {
   const rawPoints = element.points;
 
@@ -84,11 +81,7 @@ const normalizeArrowPoints = (element: Record<string, unknown>): Point[] => {
     return ensureMinimumArrowPoints(points);
   }
 
-  const start = pointOrDefault(element.start, { x: 0, y: 0 });
-  const end = pointOrDefault(element.end, start);
-  const middle = pointOrDefault(element.middle, getMiddlePoint(start, end));
-
-  return [start, middle, end];
+  return ensureMinimumArrowPoints([]);
 };
 
 const ensureMinimumArrowPoints = (points: Point[]): Point[] => {
@@ -100,7 +93,7 @@ const ensureMinimumArrowPoints = (points: Point[]): Point[] => {
     const [start, end] = points;
 
     if (start && end) {
-      return [start, getMiddlePoint(start, end), end];
+      return [start, { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 }, end];
     }
   }
 
@@ -113,55 +106,44 @@ const normalizeElement = (
   element: DrawingElement | Record<string, unknown>,
   layerFallback: number,
 ): DrawingElement => {
-  const migratedElement =
-    element.type === "square"
-      ? { ...element, type: "rectangle" }
-      : element.type === "circle"
-        ? { ...element, type: "ellipse" }
-        : element;
-
-  if (migratedElement.type === "arrow") {
-    const migratedArrow = migratedElement as Record<string, unknown>;
-    const arrowElement = { ...migratedArrow };
-
-    delete arrowElement.start;
-    delete arrowElement.middle;
-    delete arrowElement.end;
+  if (element.type === "arrow") {
+    const arrow = element as Record<string, unknown>;
 
     return {
-      ...arrowElement,
-      points: normalizeArrowPoints(migratedArrow),
-      style: normalizeStyle(migratedArrow.style),
-      layer: finiteOrDefault(migratedArrow.layer, layerFallback),
+      ...arrow,
+      points: normalizeArrowPoints(arrow),
+      style: normalizeStyle(arrow.style),
+      layer: finiteOrDefault(arrow.layer, layerFallback),
     } as DrawingElement;
   }
 
-  if (migratedElement.type === "text") {
-    const migratedText = migratedElement as Record<string, unknown>;
-    const text = typeof migratedText.text === "string" ? migratedText.text : "";
-    const fontSize = finiteOrDefault(migratedText.fontSize, DEFAULT_TEXT_FONT_SIZE);
-    const width = Math.max(
-      finiteOrDefault(migratedText.width, 0),
-      getTextElementWidth(text, fontSize),
-    );
+  if (element.type === "text") {
+    const textElement = element as Record<string, unknown>;
+    const text = typeof textElement.text === "string" ? textElement.text : "";
+    const fontSize = positiveOrDefault(textElement.fontSize, DEFAULT_TEXT_FONT_SIZE);
+    const naturalWidth = getTextElementWidth(text, fontSize);
+    const width = Math.max(MIN_TEXT_WIDTH, positiveOrDefault(textElement.width, naturalWidth));
+    const computedHeight = getTextElementHeight(text, fontSize, width);
+    const height = positiveOrDefault(textElement.height, computedHeight);
 
     return {
-      ...migratedText,
+      ...textElement,
       text,
-      textAlign: textAlignOrDefault(migratedText.textAlign),
+      textAlign: textAlignOrDefault(textElement.textAlign),
       fontSize,
       width,
-      style: normalizeStyle(migratedText.style),
-      layer: finiteOrDefault(migratedText.layer, layerFallback),
+      height,
+      style: normalizeStyle(textElement.style),
+      layer: finiteOrDefault(textElement.layer, layerFallback),
     } as DrawingElement;
   }
 
-  const migratedRecord = migratedElement as Record<string, unknown>;
+  const elementRecord = element as Record<string, unknown>;
 
   return {
-    ...migratedRecord,
-    style: normalizeStyle(migratedRecord.style),
-    layer: finiteOrDefault(migratedRecord.layer, layerFallback),
+    ...elementRecord,
+    style: normalizeStyle(elementRecord.style),
+    layer: finiteOrDefault(elementRecord.layer, layerFallback),
   } as DrawingElement;
 };
 
@@ -177,26 +159,30 @@ const normalizeElements = (elements: Array<DrawingElement | Record<string, unkno
 };
 
 export const createEmptyScene = (): SceneSnapshot => ({
-  version: 1,
+  version: 2,
   elements: [],
   viewport: { ...DEFAULT_VIEWPORT },
   updatedAt: Date.now(),
 });
 
-export const normalizeScene = (scene: Partial<SceneSnapshot> | null | undefined): SceneSnapshot => {
-  if (!scene || scene.version !== 1 || !Array.isArray(scene.elements)) {
+export const normalizeScene = (
+  scene: Partial<SceneSnapshot> | Record<string, unknown> | null | undefined,
+): SceneSnapshot => {
+  if (!scene || scene.version !== 2 || !Array.isArray(scene.elements)) {
     return createEmptyScene();
   }
 
   const viewport = scene.viewport;
+  const normalizedViewport =
+    viewport && typeof viewport === "object" ? (viewport as Record<string, unknown>) : undefined;
 
   return {
-    version: 1,
+    version: 2,
     elements: normalizeElements(scene.elements as Array<Record<string, unknown>>),
     viewport: {
-      x: finiteOrDefault(viewport?.x, DEFAULT_VIEWPORT.x),
-      y: finiteOrDefault(viewport?.y, DEFAULT_VIEWPORT.y),
-      zoom: clampViewportZoom(finiteOrDefault(viewport?.zoom, DEFAULT_VIEWPORT.zoom)),
+      x: finiteOrDefault(normalizedViewport?.x, DEFAULT_VIEWPORT.x),
+      y: finiteOrDefault(normalizedViewport?.y, DEFAULT_VIEWPORT.y),
+      zoom: clampViewportZoom(finiteOrDefault(normalizedViewport?.zoom, DEFAULT_VIEWPORT.zoom)),
     },
     updatedAt: finiteOrDefault(scene.updatedAt, Date.now()),
   };

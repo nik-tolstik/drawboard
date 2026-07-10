@@ -63,6 +63,31 @@ describe("getInlineTextEditorMetrics", () => {
     expect(metrics.width).toBe(66);
   });
 
+  it("keeps a fixed block width while editing existing text", () => {
+    const metrics = getInlineTextEditorMetrics({
+      text: "A note that wraps",
+      fontSize: 24,
+      width: 140,
+      viewportZoom: 1,
+      measureTextWidth: () => 300,
+      measureTextHeight: () => 62.4,
+    });
+
+    expect(metrics.width).toBe(140);
+    expect(metrics.height).toBe(62.4);
+  });
+
+  it("uses wrapped fallback height for a fixed block width", () => {
+    const metrics = getInlineTextEditorMetrics({
+      text: "one two three four",
+      fontSize: 24,
+      width: 80,
+      viewportZoom: 1,
+    });
+
+    expect(metrics.height).toBeGreaterThan(24 * 1.3);
+  });
+
   it("does not cap long single-line editor width", () => {
     const metrics = getInlineTextEditorMetrics({
       text: "123456789123456789123456789123456789",

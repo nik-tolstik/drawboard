@@ -1,6 +1,5 @@
 import {
   createElementId,
-  getTextElementHeight,
   type ArrowElement,
   type BrushElement,
   type DrawingElement,
@@ -40,7 +39,7 @@ export const getElementBounds = (element: DrawingElement): Rect => {
       x: element.x,
       y: element.y,
       width: element.width,
-      height: getTextElementHeight(element.text, element.fontSize),
+      height: element.height,
     };
   }
 

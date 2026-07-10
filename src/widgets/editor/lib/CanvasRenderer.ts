@@ -16,12 +16,14 @@ import {
   getArrowHeadSegment,
   getElementBounds,
   getElementsInLayerOrder,
+  getResizeHandlePoints,
   getRoundedShapeContour,
+  isResizableElement,
   normalizeRect,
   type Rect,
 } from "@/entities/scene";
 
-import { getCanvasTextFont } from "./textMeasurement";
+import { getCanvasTextFont, measureTextElementLayout } from "./textMeasurement";
 
 export type CanvasRenderOptions = {
   preview?: DrawingElement;
@@ -158,7 +160,12 @@ export class CanvasRenderer {
     this.context.fillStyle = element.style.stroke;
     const textX = this.getTextLineX(element);
 
-    const lines = element.text.split("\n");
+    const { lines } = measureTextElementLayout(
+      this.context,
+      element.text,
+      element.width,
+      element.fontSize,
+    );
 
     for (let index = 0; index < lines.length; index += 1) {
       this.context.fillText(
@@ -283,6 +290,7 @@ export class CanvasRenderer {
   ): void {
     const scale = Math.max(zoom, 0.01);
     const outlinePadding = 6 / scale;
+    const canResizeSelection = selectedElementIds.size === 1;
 
     this.context.save();
     this.context.strokeStyle = "rgba(75, 111, 255, 0.95)";
@@ -300,7 +308,8 @@ export class CanvasRenderer {
       }
 
       const bounds = normalizeRect(getElementBounds(element));
-      const elementOutlinePadding = element.type === "text" ? 0 : outlinePadding;
+      const isResizable = isResizableElement(element);
+      const elementOutlinePadding = isResizable ? 0 : outlinePadding;
 
       this.context.strokeRect(
         bounds.x - elementOutlinePadding,
@@ -308,6 +317,29 @@ export class CanvasRenderer {
         bounds.width + elementOutlinePadding * 2,
         bounds.height + elementOutlinePadding * 2,
       );
+
+      if (canResizeSelection && isResizable) {
+        this.drawResizeHandles(bounds, zoom);
+      }
+    }
+
+    this.context.restore();
+  }
+
+  private drawResizeHandles(bounds: Rect, zoom: number): void {
+    const scale = Math.max(zoom, 0.01);
+    const size = 9 / scale;
+    const halfSize = size / 2;
+
+    this.context.save();
+    this.context.setLineDash([]);
+    this.context.lineWidth = 1.5 / scale;
+    this.context.strokeStyle = "rgba(75, 111, 255, 0.98)";
+    this.context.fillStyle = "#ffffff";
+
+    for (const point of Object.values(getResizeHandlePoints(bounds))) {
+      this.context.fillRect(point.x - halfSize, point.y - halfSize, size, size);
+      this.context.strokeRect(point.x - halfSize, point.y - halfSize, size, size);
     }
 
     this.context.restore();

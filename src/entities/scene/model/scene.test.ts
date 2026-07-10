@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_VIEWPORT, getTextElementWidth } from "./elements";
+import { DEFAULT_VIEWPORT, getTextElementHeight, getTextElementWidth } from "./elements";
 import { MAX_VIEWPORT_ZOOM, MIN_VIEWPORT_ZOOM } from "./geometry";
 import { createEmptyScene, normalizeScene } from "./scene";
 
 describe("scene", () => {
-  it("creates an empty v1 scene", () => {
+  it("creates an empty v2 scene", () => {
     const scene = createEmptyScene();
 
-    expect(scene.version).toBe(1);
+    expect(scene.version).toBe(2);
     expect(scene.elements).toEqual([]);
     expect(scene.viewport).toEqual(DEFAULT_VIEWPORT);
   });
@@ -15,12 +15,13 @@ describe("scene", () => {
   it("falls back to an empty scene for invalid data", () => {
     expect(normalizeScene(null).elements).toEqual([]);
     expect(normalizeScene({ version: 99 } as never).viewport).toEqual(DEFAULT_VIEWPORT);
+    expect(normalizeScene({ version: 1, elements: [{ type: "rectangle" }] }).elements).toEqual([]);
   });
 
   it("repairs missing viewport values", () => {
     expect(
       normalizeScene({
-        version: 1,
+        version: 2,
         elements: [],
         viewport: { x: Number.NaN, y: 12, zoom: Number.NaN },
         updatedAt: Number.NaN,
@@ -35,44 +36,23 @@ describe("scene", () => {
   it("clamps persisted viewport zoom values", () => {
     expect(
       normalizeScene({
-        version: 1,
+        version: 2,
         elements: [],
         viewport: { x: 0, y: 0, zoom: 0 },
       }).viewport.zoom,
     ).toBe(MIN_VIEWPORT_ZOOM);
     expect(
       normalizeScene({
-        version: 1,
+        version: 2,
         elements: [],
         viewport: { x: 0, y: 0, zoom: 10 },
       }).viewport.zoom,
     ).toBe(MAX_VIEWPORT_ZOOM);
   });
 
-  it("normalizes shape element types", () => {
+  it("repairs missing element layers", () => {
     const scene = normalizeScene({
-      version: 1,
-      elements: [
-        { id: "1", type: "square" },
-        { id: "2", type: "rectangle" },
-        { id: "3", type: "circle" },
-        { id: "4", type: "ellipse" },
-      ] as never,
-      viewport: DEFAULT_VIEWPORT,
-      updatedAt: Date.now(),
-    });
-
-    expect(scene.elements.map((element) => element.type)).toEqual([
-      "rectangle",
-      "rectangle",
-      "ellipse",
-      "ellipse",
-    ]);
-  });
-
-  it("adds layers to old persisted elements", () => {
-    const scene = normalizeScene({
-      version: 1,
+      version: 2,
       elements: [
         { id: "1", type: "text" },
         { id: "2", type: "text", layer: 8 },
@@ -87,7 +67,7 @@ describe("scene", () => {
 
   it("repairs missing styles and text alignment", () => {
     const scene = normalizeScene({
-      version: 1,
+      version: 2,
       elements: [
         {
           id: "1",
@@ -116,7 +96,7 @@ describe("scene", () => {
 
   it("normalizes persisted border radius presets", () => {
     const scene = normalizeScene({
-      version: 1,
+      version: 2,
       elements: [
         { id: "1", type: "rectangle", style: { borderRadius: 16 } },
         { id: "2", type: "diamond", style: { borderRadius: 12 } },
@@ -129,47 +109,57 @@ describe("scene", () => {
     expect(scene.elements.map((element) => element.style.borderRadius)).toEqual([16, 0, 0]);
   });
 
-  it("widens old persisted text elements to the current computed width", () => {
-    const text = "123456789123456789123456789123456789";
+  it("preserves user-sized text dimensions", () => {
     const scene = normalizeScene({
-      version: 1,
-      elements: [{ id: "1", type: "text", text, fontSize: 24, width: 460 }] as never,
-      viewport: DEFAULT_VIEWPORT,
-      updatedAt: Date.now(),
-    });
-    const [element] = scene.elements;
-
-    expect(element?.type).toBe("text");
-    expect(element?.type === "text" ? element.width : undefined).toBe(getTextElementWidth(text));
-  });
-
-  it("migrates old persisted arrows to points", () => {
-    const scene = normalizeScene({
-      version: 1,
+      version: 2,
       elements: [
         {
           id: "1",
-          type: "arrow",
-          start: { x: 10, y: 20 },
-          end: { x: 50, y: 60 },
+          type: "text",
+          text: "one two three",
+          fontSize: 24,
+          width: 72,
+          height: 124.8,
         },
       ] as never,
       viewport: DEFAULT_VIEWPORT,
       updatedAt: Date.now(),
     });
-    const [arrow] = scene.elements;
+    const [element] = scene.elements;
 
-    expect(arrow?.type).toBe("arrow");
-    expect(arrow?.type === "arrow" ? arrow.points : undefined).toEqual([
-      { x: 10, y: 20 },
-      { x: 30, y: 40 },
-      { x: 50, y: 60 },
-    ]);
+    expect(element?.type === "text" ? element.width : undefined).toBe(72);
+    expect(element?.type === "text" ? element.height : undefined).toBe(124.8);
+  });
+
+  it("repairs invalid text dimensions", () => {
+    const scene = normalizeScene({
+      version: 2,
+      elements: [
+        {
+          id: "1",
+          type: "text",
+          text: "one two three",
+          fontSize: 24,
+          width: -10,
+          height: Number.NaN,
+        },
+      ] as never,
+      viewport: DEFAULT_VIEWPORT,
+      updatedAt: Date.now(),
+    });
+    const [element] = scene.elements;
+
+    expect(element?.type === "text" ? element.width : undefined).toBe(
+      getTextElementWidth("one two three"),
+    );
+    expect(element?.type === "text" ? element.height : undefined).toBe(
+      getTextElementHeight("one two three", 24, getTextElementWidth("one two three")),
+    );
   });
 
   it("keeps persisted arrows at the minimum of three points", () => {
     const scene = normalizeScene({
-      version: 1,
+      version: 2,
       elements: [
         {
           id: "1",
